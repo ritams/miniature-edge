@@ -1,0 +1,32 @@
+[project]
+name = "miniature-edge"
+version = "0.1.0"
+description = "Personal crypto research stack: data, features, signals, exec"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Ritam" }]
+
+# Keep deps tight and minimal per codingstyle.md
+dependencies = [
+    "pydantic>=2.6",
+    "pydantic-settings>=2.3",
+    "PyYAML>=6.0",
+    "ccxt>=4.3.0",
+    "pandas>=2.2",
+    "duckdb>=0.10.2",
+    "pyarrow>=15.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+
+[project.scripts]
+# Enables: `uv run refresh`
+refresh = "exec.refresh:main"
+scan = "exec.scan:main"
+audit = "exec.audit:main"
+backtest = "exec.backtest:main"
+alert-test = "exec.alert_test:main"
+
+[tool.uv]
+# uv will resolve and cache deps per project
