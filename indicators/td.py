@@ -14,6 +14,10 @@ class TDState:
 
 
 def _price_flip(df: pd.DataFrame) -> str:
+    """Minimal price flip: compare close vs close 4 bars earlier.
+
+    Returns: bullish/bearish/none
+    """
     if len(df) < 5:
         return "none"
     c = df["c"]
@@ -27,7 +31,10 @@ def _price_flip(df: pd.DataFrame) -> str:
 
 
 def compute(df: pd.DataFrame, strict_perfection: bool = True) -> TDState:
-    # Minimal TD setup computation on last bar only
+    """Minimal TD state on the last bar (stub for a full TD engine).
+
+    Ensures index safety and avoids negative indexing.
+    """
     flip = _price_flip(df)
     setup_type: str | None = None
     setup_count = 0
@@ -36,30 +43,41 @@ def compute(df: pd.DataFrame, strict_perfection: bool = True) -> TDState:
     tdst_buy = None
     tdst_sell = None
 
-    if len(df) >= 10:
+    n = len(df)
+    if n >= 10:
         c = df["c"].reset_index(drop=True)
         h = df["h"].reset_index(drop=True)
         l = df["l"].reset_index(drop=True)
-        # Determine setup over last 9 bars
-        setup_count = 0
+        # Evaluate last up-to-9 bars without negative indices
+        start = max(4, n - 9)
         if flip == "bullish":
             setup_type = "sell"
-            for i in range(len(c)-9, len(c)):
-                if c[i] > c[i-4]:
-                    setup_count += 1
+            cnt = 0
+            for i in range(start, n):
+                if i - 4 < 0:
+                    continue
+                if c.iloc[i] > c.iloc[i - 4]:
+                    cnt += 1
                 else:
-                    setup_count = 0
-            tdst_sell = float(max(h[len(c)-9:len(c)-1]))
-            perfected = (h.iloc[-2] > h.iloc[-4]) if strict_perfection else True
+                    cnt = 0
+            setup_count = cnt
+            if n >= 5:
+                tdst_sell = float(h.iloc[max(0, n - 9): n - 1].max())
+                perfected = (h.iloc[-2] > h.iloc[-4]) if (strict_perfection and n >= 5) else True
         elif flip == "bearish":
             setup_type = "buy"
-            for i in range(len(c)-9, len(c)):
-                if c[i] < c[i-4]:
-                    setup_count += 1
+            cnt = 0
+            for i in range(start, n):
+                if i - 4 < 0:
+                    continue
+                if c.iloc[i] < c.iloc[i - 4]:
+                    cnt += 1
                 else:
-                    setup_count = 0
-            tdst_buy = float(min(l[len(c)-9:len(c)-1]))
-            perfected = (l.iloc[-2] < l.iloc[-4]) if strict_perfection else True
+                    cnt = 0
+            setup_count = cnt
+            if n >= 5:
+                tdst_buy = float(l.iloc[max(0, n - 9): n - 1].min())
+                perfected = (l.iloc[-2] < l.iloc[-4]) if (strict_perfection and n >= 5) else True
 
     return TDState(
         flip=flip,

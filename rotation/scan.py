@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 
 from features.store import load
+from common.timeframe import tf_to_seconds
 
 LOG = logging.getLogger(__name__)
 
@@ -21,16 +22,16 @@ class RotationCandidate:
     status: str  # e.g., LAGGING_ROTATION
 
 
-def _pct_move(df: pd.DataFrame) -> float:
-    if len(df) < 2:
-        raise ValueError("Need >=2 rows to compute move")
-    p0, p1 = float(df["c"].iloc[-2]), float(df["c"].iloc[-1])
+def _pct_move(df: pd.DataFrame, lookback: int = 1) -> float:
+    if len(df) < lookback + 1:
+        raise ValueError("Need >=lookback+1 rows to compute move")
+    p0, p1 = float(df["c"].iloc[-(lookback + 1)]), float(df["c"].iloc[-1])
     return (p1 / p0 - 1.0) * 100.0
 
 
 def _rolling_corr_beta(coin: pd.Series, apex: pd.Series, w_corr: int, w_beta: int) -> Tuple[float, float]:
-    c = coin.pct_change().dropna()
-    a = apex.pct_change().dropna()
+    c = coin.pct_change(fill_method=None).dropna()
+    a = apex.pct_change(fill_method=None).dropna()
     both = pd.concat([c, a], axis=1).dropna()
     if len(both) < max(w_corr, w_beta):
         return float("nan"), float("nan")
@@ -44,7 +45,8 @@ def _rolling_corr_beta(coin: pd.Series, apex: pd.Series, w_corr: int, w_beta: in
 def scan(apex_assets: Sequence[str], basket: Sequence[str], *, tf: str, cache: str,
          move_threshold_pct: float, alt_lag_threshold_pct: float,
          corr_min: float, beta_min: float,
-         corr_window: int = 14, beta_window: int = 30) -> List[RotationCandidate]:
+         corr_window: int = 14, beta_window: int = 30,
+         move_lookback_bars: int = 1) -> List[RotationCandidate]:
     """Scan for lagging rotations on the last bar of tf using cached OHLCV.
 
     Returns a list of RotationCandidate.
@@ -58,11 +60,19 @@ def scan(apex_assets: Sequence[str], basket: Sequence[str], *, tf: str, cache: s
         coin_df = load(cache, coin, tf, cols=["t", "c"])  # align by merge later
         for apex in apex_assets:
             a_df = apex_dfs[apex]
-            merged = pd.merge_asof(coin_df.sort_values("t"), a_df.sort_values("t"), on="t", direction="nearest", suffixes=("_coin", "_apex"))
-            if len(merged) < max(corr_window, beta_window) + 1:
+            tol = pd.Timedelta(seconds=int(tf_to_seconds(tf) // 2))
+            merged = pd.merge_asof(
+                coin_df.sort_values("t"),
+                a_df.sort_values("t"),
+                on="t",
+                direction="backward",
+                tolerance=tol,
+                suffixes=("_coin", "_apex"),
+            )
+            if len(merged) < max(corr_window, beta_window, move_lookback_bars) + 1:
                 continue
-            apex_move = _pct_move(merged[["t", "c_apex"]].rename(columns={"c_apex": "c"}))
-            coin_move = _pct_move(merged[["t", "c_coin"]].rename(columns={"c_coin": "c"}))
+            apex_move = _pct_move(merged[["t", "c_apex"]].rename(columns={"c_apex": "c"}), lookback=move_lookback_bars)
+            coin_move = _pct_move(merged[["t", "c_coin"]].rename(columns={"c_coin": "c"}), lookback=move_lookback_bars)
             corr, beta = _rolling_corr_beta(merged["c_coin"], merged["c_apex"], corr_window, beta_window)
 
             if pd.isna(corr) or pd.isna(beta):

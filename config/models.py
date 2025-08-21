@@ -30,6 +30,9 @@ class Apex(BaseModel):
     alt_lag_threshold_pct: float
     corr_min: float
     beta_min: float
+    # Number of bars to measure apex/coin move over on LTF. Default 3 to catch
+    # sustained impulses while keeping existing config.yaml valid.
+    move_lookback_bars: int = Field(default=3)
 
 
 class MarketFilters(BaseModel):

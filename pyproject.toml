@@ -27,6 +27,7 @@ scan = "exec.scan:main"
 audit = "exec.audit:main"
 backtest = "exec.backtest:main"
 alert-test = "exec.alert_test:main"
+smoke = "exec.smoke:main"
 
 [tool.uv]
 # uv will resolve and cache deps per project
